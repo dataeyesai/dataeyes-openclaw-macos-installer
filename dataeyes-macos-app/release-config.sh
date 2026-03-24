@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+APP_NAME="${APP_NAME:-DataEyes Installer}"
+APP_BUNDLE_ID="${APP_BUNDLE_ID:-ai.dataeyes.installer}"
+APP_VERSION="${APP_VERSION:-1.0.0}"
+APP_BUILD="${APP_BUILD:-1}"
+APP_MIN_MACOS="${APP_MIN_MACOS:-13.0}"
+APP_CATEGORY="${APP_CATEGORY:-public.app-category.developer-tools}"
+PAYLOAD_SOURCE="${PAYLOAD_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../dataeyes-installer-src-v2}"
+APP_ICON_NAME="${APP_ICON_NAME:-AppIcon}"
+PKG_IDENTIFIER="${PKG_IDENTIFIER:-ai.dataeyes.installer.pkg}"
+DMG_VOLUME_NAME="${DMG_VOLUME_NAME:-DataEyes Installer}"
+DEVELOPER_ID_APP="${DEVELOPER_ID_APP:-Developer ID Application: YOUR TEAM NAME (TEAMID)}"
+DEVELOPER_ID_INSTALLER="${DEVELOPER_ID_INSTALLER:-Developer ID Installer: YOUR TEAM NAME (TEAMID)}"
+KEYCHAIN_PROFILE="${KEYCHAIN_PROFILE:-AC_NOTARY}"
