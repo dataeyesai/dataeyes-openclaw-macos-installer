@@ -1,3 +1,4 @@
 .DS_Store
 dataeyes-macos-app/build/
 !artifacts/
+release/
