@@ -2,6 +2,28 @@
 
 `DataEyes × OpenClaw` 的 macOS 安装器发布仓库。
 
+## 直接下载
+
+普通用户请优先下载：
+
+- [DataEyes.Installer.dmg](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases/latest/download/DataEyes.Installer.dmg)
+
+备用下载：
+
+- [DataEyes.Installer.zip](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases/latest/download/DataEyes.Installer.zip)
+- [DataEyes.Installer-unsigned.pkg](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases/latest/download/DataEyes.Installer-unsigned.pkg)
+- [SHA256SUMS.txt](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases/latest/download/SHA256SUMS.txt)
+
+下载建议：
+
+- `DMG`：最适合普通 macOS 用户，推荐使用
+- `ZIP`：适合直接拿到 `.app` 使用
+- `PKG`：当前为未签名安装包，主要用于内部测试或后续补签名
+
+完整发布页：
+
+- [GitHub Releases](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases)
+
 这里同时保留了：
 
 - 脚本安装器源码
