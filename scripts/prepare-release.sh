@@ -112,6 +112,7 @@ write_release_notes() {
 - Lets users refresh models later with \`~/.dataeyes-openclaw/bin/dataeyes-refresh-models\`
 - Adds a clearer installer UI with step progress, heartbeat status, and cleaned logs
 - Validates API keys before install and adds a button to open the OpenClaw config file
+- Fixes repeated-install npm conflicts by cleaning stale OpenClaw directories before reinstall
 - Builds a universal app for both Apple Silicon and Intel Macs
 - Fixes the broken bundle signature that previously caused macOS to report the app as damaged
 - Fixes paste behavior in the macOS password field

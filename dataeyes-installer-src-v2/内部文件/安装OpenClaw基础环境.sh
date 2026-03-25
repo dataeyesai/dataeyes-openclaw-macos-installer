@@ -189,24 +189,64 @@ npm_install_openclaw() {
     return 1
   fi
 
+  local package_name="$OPENCLAW_PKG"
+  if [[ "$package_name" == @*/*@* ]]; then
+    package_name="${package_name%@*}"
+  elif [[ "$package_name" == *@* ]]; then
+    package_name="${package_name%@*}"
+  fi
+  if [[ -z "$package_name" ]]; then
+    package_name="openclaw"
+  fi
+
   local tmp_cache
   tmp_cache=$(mktemp -d)
+  local install_log
+  install_log="$tmp_cache/npm-install.log"
 
   info "安装位置: $NPM_HOME"
   info "软件包: $OPENCLAW_PKG"
 
-  if NPM_CONFIG_PREFIX="$NPM_HOME" \
-     NPM_CONFIG_CACHE="$tmp_cache" \
-     NPM_CONFIG_FUND=false \
-     NPM_CONFIG_AUDIT=false \
-     NPM_CONFIG_UPDATE_NOTIFIER=false \
-     "$npm_cmd" install -g "$OPENCLAW_PKG" --loglevel=notice; then
+  cleanup_openclaw_install() {
+    info "清理旧的 OpenClaw 安装残留"
+    "$npm_cmd" uninstall -g "$package_name" >/dev/null 2>&1 || true
+    rm -rf \
+      "$NPM_HOME/lib/node_modules/$package_name" \
+      "$NPM_HOME/lib/node_modules/.${package_name}-"* \
+      "$BIN_HOME/$package_name"
+  }
+
+  run_install() {
+    NPM_CONFIG_PREFIX="$NPM_HOME" \
+    NPM_CONFIG_CACHE="$tmp_cache" \
+    NPM_CONFIG_FUND=false \
+    NPM_CONFIG_AUDIT=false \
+    NPM_CONFIG_UPDATE_NOTIFIER=false \
+    "$npm_cmd" install -g "$OPENCLAW_PKG" --loglevel=notice 2>&1 | tee "$install_log"
+    return "${PIPESTATUS[0]}"
+  }
+
+  cleanup_openclaw_install
+
+  if run_install; then
     rm -rf "$tmp_cache"
     export PATH="$BIN_HOME:$PATH"
     success "OpenClaw 安装完成"
     return 0
   fi
 
+  if grep -q "ENOTEMPTY" "$install_log" 2>/dev/null; then
+    warn "检测到 npm 目录替换冲突，执行强制清理后重试一次"
+    cleanup_openclaw_install
+    if run_install; then
+      rm -rf "$tmp_cache"
+      export PATH="$BIN_HOME:$PATH"
+      success "OpenClaw 安装完成"
+      return 0
+    fi
+  fi
+
+  cat "$install_log" 2>/dev/null || true
   rm -rf "$tmp_cache"
   error "OpenClaw 安装失败"
   return 1

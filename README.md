@@ -73,6 +73,7 @@
 - 提供 `~/.dataeyes-openclaw/bin/dataeyes-refresh-models` 用于后续刷新模型
 - 安装界面显示当前步骤、进度条和实时心跳状态，日志区不再显示 ANSI 乱码
 - 安装前可直接验证 API Key 是否可用，并可在安装后打开 `~/.openclaw/openclaw.json`
+- 修复重复安装时 npm 目录冲突导致的 `ENOTEMPTY` 安装失败
 - 修复 macOS 密码框粘贴问题
 - 安装时强制覆盖旧的 gateway service 定义，避免 `loaded but stopped`
 - 安装完成后不再直接打开裸的 `127.0.0.1:18789`
