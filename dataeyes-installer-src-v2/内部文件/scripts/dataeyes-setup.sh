@@ -43,6 +43,43 @@ existing_defaults = ((cfg.get('agents') or {}).get('defaults') or {})
 
 DEFAULT_CONTEXT_WINDOW = 256000
 DEFAULT_MAX_TOKENS = 8192
+EXCLUDED_MODEL_KEYWORDS = (
+    'image',
+    'vision',
+    'video',
+    'audio',
+    'tts',
+    'speech',
+    'voice',
+    'embedding',
+    'embed',
+    'rerank',
+    'moderation',
+    'ocr',
+    'transcribe',
+    'realtime',
+    'preview',
+    'seedream',
+    'seedance',
+    'omni'
+)
+ALLOWED_CHAT_MODEL_HINTS = (
+    'gpt',
+    'claude',
+    'gemini',
+    'deepseek',
+    'glm',
+    'qwen',
+    'kimi',
+    'moonshot',
+    'minimax',
+    'doubao',
+    'mistral',
+    'llama',
+    'o1',
+    'o3',
+    'o4'
+)
 
 def prettify_model_name(model_id):
     parts = [p for p in re.split(r'[-_/]+', model_id) if p]
@@ -121,6 +158,44 @@ def normalize_input_capabilities(item):
 
     return ['text', 'image']
 
+def looks_like_chat_model(model_id, source, normalized_input):
+    haystacks = [model_id.lower()]
+    if isinstance(source, dict):
+        for key in ('name', 'type', 'family', 'description'):
+            value = source.get(key)
+            if isinstance(value, str):
+                haystacks.append(value.lower())
+
+    combined = ' '.join(haystacks)
+    if 'text' not in normalized_input:
+        return False
+
+    if any(keyword in combined for keyword in EXCLUDED_MODEL_KEYWORDS):
+        return False
+
+    if not any(keyword in combined for keyword in ALLOWED_CHAT_MODEL_HINTS):
+        return False
+
+    return True
+
+def sort_key_for_model(provider_id, model_id):
+    preferred = {
+        'dataeyes': [
+            'gpt-5.4',
+            'claude-opus-4-6',
+            'gemini-3.1-pro-preview-customtools'
+        ],
+        'shuyanai': [
+            'deepseek-chat',
+            'qwen-max',
+            'glm-4-plus'
+        ]
+    }
+    order = preferred.get(provider_id, [])
+    if model_id in order:
+        return (0, order.index(model_id), model_id)
+    return (1, 9999, model_id)
+
 def extract_model_id(item):
     if isinstance(item, str):
         return item.strip()
@@ -176,12 +251,15 @@ def normalize_models(provider_id, models):
         model_id = extract_model_id(item)
         if not model_id or model_id in seen:
             continue
-        seen.add(model_id)
         source = item if isinstance(item, dict) else {}
+        normalized_input = normalize_input_capabilities(source)
+        if not looks_like_chat_model(model_id, source, normalized_input):
+            continue
+        seen.add(model_id)
         normalized.append({
             'id': model_id,
             'name': provider_display_names.get(model_id) or source.get('name') or prettify_model_name(model_id),
-            'input': normalize_input_capabilities(source),
+            'input': normalized_input,
             'contextWindow': get_nested_value(
                 source,
                 'contextWindow',
@@ -201,6 +279,7 @@ def normalize_models(provider_id, models):
                 'max_completion_tokens'
             ) or DEFAULT_MAX_TOKENS
         })
+    normalized.sort(key=lambda item: sort_key_for_model(provider_id, item['id']))
     return normalized
 
 def existing_api_key(provider_id):
@@ -292,14 +371,13 @@ current_model = existing_defaults.get('model') or {}
 current_primary = current_model.get('primary') if isinstance(current_model, dict) else current_model
 primary = None
 
-if isinstance(current_primary, str) and current_primary in all_models:
-    primary = current_primary
+for candidate in model_candidates:
+    if candidate in all_models:
+        primary = candidate
+        break
 
-if primary is None:
-    for candidate in model_candidates:
-        if candidate in all_models:
-            primary = candidate
-            break
+if primary is None and isinstance(current_primary, str) and current_primary in all_models:
+    primary = current_primary
 
 if primary is None and selected_models:
     primary = selected_models[0]

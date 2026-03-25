@@ -2,8 +2,8 @@
 
 APP_NAME="${APP_NAME:-DataEyes Installer}"
 APP_BUNDLE_ID="${APP_BUNDLE_ID:-ai.dataeyes.installer}"
-APP_VERSION="${APP_VERSION:-1.0.6}"
-APP_BUILD="${APP_BUILD:-7}"
+APP_VERSION="${APP_VERSION:-1.0.7}"
+APP_BUILD="${APP_BUILD:-8}"
 APP_MIN_MACOS="${APP_MIN_MACOS:-13.0}"
 APP_CATEGORY="${APP_CATEGORY:-public.app-category.developer-tools}"
 PAYLOAD_SOURCE="${PAYLOAD_SOURCE:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../dataeyes-installer-src-v2}"

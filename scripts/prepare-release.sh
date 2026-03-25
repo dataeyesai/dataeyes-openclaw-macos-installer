@@ -114,6 +114,7 @@ write_release_notes() {
 - Validates API keys before install and adds a button to open the OpenClaw config file
 - Fixes repeated-install npm conflicts by cleaning stale OpenClaw directories before reinstall
 - Detects existing installs and offers an explicit clean reinstall mode in the UI
+- Filters out non-chat models and prioritizes \`gpt-5.4\` as the default when available
 - Builds a universal app for both Apple Silicon and Intel Macs
 - Fixes the broken bundle signature that previously caused macOS to report the app as damaged
 - Fixes paste behavior in the macOS password field
