@@ -38,6 +38,11 @@ bash build-app.sh
 - `build/DataEyes Installer.app`
 - `build/DataEyes Installer.zip`
 
+当前默认会生成：
+
+- `arm64 + x86_64` 的 universal app
+- 完整的 ad-hoc bundle 签名，避免 bundle 被系统判定为“已损坏”
+
 导出 DMG：
 
 ```bash

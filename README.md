@@ -20,6 +20,17 @@
 - `ZIP`：适合直接拿到 `.app` 使用
 - `PKG`：当前为未签名安装包，主要用于内部测试或后续补签名
 
+兼容性：
+
+- 支持 Apple Silicon（M1 / M2 / M3 / M4）和 Intel Mac
+- 当前构建为 universal app：`arm64 + x86_64`
+
+首次打开说明：
+
+- 这版已经修复“应用已损坏”的打包问题
+- 但由于尚未使用 Apple Developer ID 签名并 notarization，首次打开时 macOS 仍可能提示开发者未验证
+- 如遇拦截，请在 Finder 中右键应用后选择“打开”，或到“系统设置 > 隐私与安全性”中允许打开
+
 完整发布页：
 
 - [GitHub Releases](https://github.com/dataeyesai/dataeyes-openclaw-macos-installer/releases)
@@ -52,6 +63,7 @@
 - `.dmg` 最接近普通 macOS 分发体验
 - `.zip` 适合直接分发 `.app`
 - `.pkg` 当前是未签名版本，适合内部测试或后续补签名
+- 当前 `.app` 为 universal binary，可同时支持 Intel 与 Apple Silicon
 
 ## 这版安装器包含的修复
 

@@ -10,12 +10,45 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 SOURCE_DIR="$ROOT/Sources/DataEyesInstallerApp"
 ICON_PATH="$ROOT/build/${APP_ICON_NAME}.icns"
+UNIVERSAL_BIN="$MACOS_DIR/DataEyesInstaller"
+SLICE_DIR="$ROOT/build/slices"
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+rm -rf "$SLICE_DIR"
+mkdir -p "$SLICE_DIR"
 
 bash "$ROOT/scripts/create-iconset.sh" >/dev/null
+
+build_slice() {
+  local arch="$1"
+  local output_path="$SLICE_DIR/DataEyesInstaller-$arch"
+
+  swiftc \
+    -O \
+    -target "${arch}-apple-macos${APP_MIN_MACOS}" \
+    -framework AppKit \
+    -framework Foundation \
+    "$SOURCE_DIR/main.swift" \
+    -o "$output_path"
+}
+
+build_binary() {
+  local built_slices=()
+  local arch
+
+  for arch in $APP_ARCHS; do
+    build_slice "$arch"
+    built_slices+=("$SLICE_DIR/DataEyesInstaller-$arch")
+  done
+
+  if [[ "${#built_slices[@]}" -eq 1 ]]; then
+    cp "${built_slices[0]}" "$UNIVERSAL_BIN"
+  else
+    lipo -create "${built_slices[@]}" -output "$UNIVERSAL_BIN"
+  fi
+}
 
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -50,12 +83,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 </plist>
 PLIST
 
-swiftc \
-  -O \
-  -framework AppKit \
-  -framework Foundation \
-  "$SOURCE_DIR/main.swift" \
-  -o "$MACOS_DIR/DataEyesInstaller"
+build_binary
 
 cp -R "$PAYLOAD_SOURCE" "$RESOURCES_DIR/payload"
 cp "$ICON_PATH" "$RESOURCES_DIR/${APP_ICON_NAME}.icns"
@@ -64,6 +92,11 @@ chmod +x "$RESOURCES_DIR/payload/双击开始安装.command" \
   "$RESOURCES_DIR/payload/内部文件/安装OpenClaw基础环境.sh" \
   "$RESOURCES_DIR/payload/内部文件/scripts/dataeyes-setup.sh" \
   "$RESOURCES_DIR/payload/内部文件/scripts/dataeyes-verify.sh"
+
+# Re-sign the assembled bundle after all resources have been copied in.
+# This avoids the broken linker-only signature that causes Gatekeeper to
+# report the app as damaged.
+codesign --force --deep --sign - "$APP_DIR"
 
 echo "Built app:"
 echo "$APP_DIR"

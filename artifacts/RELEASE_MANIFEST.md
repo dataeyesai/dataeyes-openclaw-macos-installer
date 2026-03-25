@@ -1,21 +1,24 @@
 # Release Manifest
 
-- Generated at: 2026-03-24 12:14:24 UTC
-- Version: 1.0.0
-- Build: 1
+- Generated at: 2026-03-25 08:31:55 UTC
+- Version: 1.0.1
+- Build: 2
 - Bundle ID: ai.dataeyes.installer
 - Minimum macOS: 13.0
+- Architectures: arm64 x86_64
 
 ## Files
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| DataEyes Installer.zip | 4.20 MiB | a424473d8def37bf5d541773fc8928f828a3086bf358c1978272b4baac640143 |
-| DataEyes Installer.dmg | 4.71 MiB | 66ef4b57ee10d9defb53cb13deb1e6f7671bfb9e8c05bc9709f53b529c31b16a |
-| DataEyes Installer-unsigned.pkg | 4.19 MiB | 2cdd8fc16fadaba792b23c9476790c2acbf3f18f247ac933ea6aefa23b7b4578 |
+| DataEyes Installer.zip | 4.23 MiB | 112f0b3018119469e2e550f60181333e693044dce978106ad31193280b44f457 |
+| DataEyes Installer.dmg | 4.65 MiB | 49d8188f84c62786b751241a277698a51e026ac14febc1941d4555a5435f7bca |
+| DataEyes Installer-unsigned.pkg | 4.22 MiB | c29ed1d836359f5281c00eab20c029e55a5d754dc32058e3800317dbc217a4a9 |
 
 ## Notes
 
 - `.dmg` is the recommended distribution format for end users.
 - `.zip` is useful for directly distributing the app bundle.
+- The app bundle is built as a universal binary for Apple Silicon and Intel Macs.
+- The app bundle is ad-hoc signed to avoid the broken-bundle "damaged" error.
 - `.pkg` is currently unsigned unless you rebuild and sign it explicitly.

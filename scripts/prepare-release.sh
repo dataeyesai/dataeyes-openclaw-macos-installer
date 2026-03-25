@@ -79,6 +79,7 @@ write_manifest() {
 - Build: ${APP_BUILD}
 - Bundle ID: ${APP_BUNDLE_ID}
 - Minimum macOS: ${APP_MIN_MACOS}
+- Architectures: ${APP_ARCHS}
 
 ## Files
 
@@ -92,6 +93,8 @@ write_manifest() {
 
 - \`.dmg\` is the recommended distribution format for end users.
 - \`.zip\` is useful for directly distributing the app bundle.
+- The app bundle is built as a universal binary for Apple Silicon and Intel Macs.
+- The app bundle is ad-hoc signed to avoid the broken-bundle "damaged" error.
 - \`.pkg\` is currently unsigned unless you rebuild and sign it explicitly.
 EOF
 }
@@ -105,6 +108,8 @@ write_release_notes() {
 ## Highlights
 
 - Supports both China and Global platform configuration
+- Builds a universal app for both Apple Silicon and Intel Macs
+- Fixes the broken bundle signature that previously caused macOS to report the app as damaged
 - Fixes paste behavior in the macOS password field
 - Forces gateway service refresh during install to reduce \`loaded but stopped\`
 - Reads the live gateway token from \`~/.openclaw/openclaw.json\`
@@ -124,7 +129,7 @@ $(cat "$CHECKSUM_FILE")
 
 ## Notes
 
-- Gatekeeper may still warn if the build has not been signed and notarized.
+- This build fixes the broken package issue, but Gatekeeper may still warn because it is not Developer ID signed and notarized yet.
 - For public distribution, prefer a signed and notarized \`.dmg\` or \`.pkg\`.
 EOF
 }

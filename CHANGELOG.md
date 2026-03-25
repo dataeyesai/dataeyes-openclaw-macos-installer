@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 - 2026-03-25
+
+- 修复 App bundle 的破损签名状态，避免 macOS 将安装器判定为“已损坏”
+- 安装器改为生成 universal app，同时支持 Apple Silicon 和 Intel Mac
+- 更新 DMG / ZIP / PKG 产物及对应的 SHA256 校验
+- 更新发布说明，明确当前为未 notarize 构建，首次打开可能仍遇到开发者验证提示
+
 ## 1.0.0 - 2026-03-24
 
 - 新增原生 AppKit macOS 安装器，可打包为 `.app` / `.dmg` / `.pkg`
