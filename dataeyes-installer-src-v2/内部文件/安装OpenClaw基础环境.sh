@@ -29,6 +29,8 @@ APP_HOME="${OPENCLAW_HOME:-$HOME/.dataeyes-openclaw}"
 NODE_HOME="$APP_HOME/node"
 NPM_HOME="$APP_HOME/npm"
 BIN_HOME="$NPM_HOME/bin"
+SUPPORT_HOME="$APP_HOME/installer-support"
+APP_BIN_HOME="$APP_HOME/bin"
 NODE_BIN_DIR=""
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -216,6 +218,19 @@ npm_install_openclaw() {
       "$BIN_HOME/$package_name"
   }
 
+  cleanup_for_reinstall() {
+    warn "已启用彻底重装，正在清理旧版本目录"
+    cleanup_openclaw_install
+    rm -rf \
+      "$NPM_HOME/lib/node_modules" \
+      "$NPM_HOME/bin" \
+      "$SUPPORT_HOME" \
+      "$APP_BIN_HOME/openclaw" \
+      "$APP_BIN_HOME/dataeyes-refresh-models" \
+      "$APP_HOME/openclaw-bin-path"
+    mkdir -p "$NPM_HOME" "$BIN_HOME" "$APP_BIN_HOME"
+  }
+
   run_install() {
     NPM_CONFIG_PREFIX="$NPM_HOME" \
     NPM_CONFIG_CACHE="$tmp_cache" \
@@ -226,7 +241,11 @@ npm_install_openclaw() {
     return "${PIPESTATUS[0]}"
   }
 
-  cleanup_openclaw_install
+  if [[ "${FORCE_CLEAN_REINSTALL:-0}" == "1" ]]; then
+    cleanup_for_reinstall
+  else
+    cleanup_openclaw_install
+  fi
 
   if run_install; then
     rm -rf "$tmp_cache"

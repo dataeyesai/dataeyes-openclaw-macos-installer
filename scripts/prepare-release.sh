@@ -113,6 +113,7 @@ write_release_notes() {
 - Adds a clearer installer UI with step progress, heartbeat status, and cleaned logs
 - Validates API keys before install and adds a button to open the OpenClaw config file
 - Fixes repeated-install npm conflicts by cleaning stale OpenClaw directories before reinstall
+- Detects existing installs and offers an explicit clean reinstall mode in the UI
 - Builds a universal app for both Apple Silicon and Intel Macs
 - Fixes the broken bundle signature that previously caused macOS to report the app as damaged
 - Fixes paste behavior in the macOS password field

@@ -47,10 +47,12 @@ final class InstallerViewController: NSViewController {
     private let versionLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "安装 OpenClaw，支持同时配置国内站和国际站，并直接启动本地控制台。")
     private let pathHintLabel = NSTextField(labelWithString: "配置文件：~/.openclaw/openclaw.json")
+    private let installModeLabel = NSTextField(labelWithString: "")
     private let shuyanaiApiKeyLabel = NSTextField(labelWithString: "国内站 API Key（可选）")
     private let shuyanaiApiKeyField = PasteFriendlySecureTextField()
     private let dataeyesApiKeyLabel = NSTextField(labelWithString: "国际站 API Key（可选）")
     private let dataeyesApiKeyField = PasteFriendlySecureTextField()
+    private let cleanReinstallButton = NSButton(checkboxWithTitle: "彻底重装（清理旧版本后再安装）", target: nil, action: nil)
     private let installButton = NSButton(title: "开始安装", target: nil, action: nil)
     private let retryButton = NSButton(title: "重新安装", target: nil, action: nil)
     private let validateKeysButton = NSButton(title: "验证 Key", target: nil, action: nil)
@@ -119,6 +121,16 @@ final class InstallerViewController: NSViewController {
 
         pathHintLabel.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         pathHintLabel.textColor = .secondaryLabelColor
+
+        installModeLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        installModeLabel.maximumNumberOfLines = 2
+        installModeLabel.lineBreakMode = .byWordWrapping
+
+        cleanReinstallButton.font = .systemFont(ofSize: 12, weight: .medium)
+        cleanReinstallButton.allowsMixedState = false
+        cleanReinstallButton.state = .off
+        cleanReinstallButton.target = self
+        cleanReinstallButton.action = #selector(updateInstallModeUI)
 
         shuyanaiApiKeyLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         shuyanaiApiKeyField.placeholderString = "请输入国内站 API Key"
@@ -225,6 +237,8 @@ final class InstallerViewController: NSViewController {
 
         let contentStack = NSStackView(views: [
             topRow,
+            installModeLabel,
+            cleanReinstallButton,
             shuyanaiApiKeyLabel,
             shuyanaiApiKeyField,
             dataeyesApiKeyLabel,
@@ -267,6 +281,8 @@ final class InstallerViewController: NSViewController {
             installProgressBar.widthAnchor.constraint(greaterThanOrEqualToConstant: 260)
         ])
 
+        setControlsEnabled(true)
+        updateInstallModeUI()
         showLogPlaceholder()
     }
 
@@ -300,6 +316,20 @@ final class InstallerViewController: NSViewController {
         }
 
         validateProviderKeys(startInstallOnSuccess: true)
+    }
+
+    @objc
+    private func updateInstallModeUI() {
+        if hasExistingInstall() {
+            installModeLabel.stringValue = "检测到旧安装：将执行覆盖升级。若之前安装异常或想彻底清理，请勾选“彻底重装”。"
+            installModeLabel.textColor = .systemOrange
+            cleanReinstallButton.isEnabled = true
+        } else {
+            installModeLabel.stringValue = "当前未检测到旧安装：将执行首次安装。"
+            installModeLabel.textColor = .secondaryLabelColor
+            cleanReinstallButton.state = .off
+            cleanReinstallButton.isEnabled = false
+        }
     }
 
     private func runInstall() {
@@ -336,6 +366,9 @@ final class InstallerViewController: NSViewController {
         if !dataeyesApiKey.isEmpty {
             env["DATAEYES_API_KEY"] = dataeyesApiKey
         }
+        if cleanReinstallButton.state == .on {
+            env["FORCE_CLEAN_REINSTALL"] = "1"
+        }
         env["OPENCLAW_HOME"] = env["OPENCLAW_HOME"].flatMap { $0.isEmpty ? nil : $0 } ?? installHome
         env["PATH"] = "\(installHome)/npm/bin:\(installHome)/node/bin:" + (env["PATH"] ?? "")
         task.environment = env
@@ -369,6 +402,7 @@ final class InstallerViewController: NSViewController {
         installButton.isEnabled = false
         retryButton.isEnabled = false
         validateKeysButton.isEnabled = false
+        cleanReinstallButton.isEnabled = false
         shuyanaiApiKeyField.isEnabled = false
         dataeyesApiKeyField.isEnabled = false
         progressIndicator.startAnimation(nil)
@@ -376,7 +410,9 @@ final class InstallerViewController: NSViewController {
         lastLogAt = Date()
         startHeartbeatTimer()
         setStatus("安装中...", color: .systemOrange)
-        summaryLabel.stringValue = "正在准备本地运行环境，并按已填写的平台自动写入配置。"
+        summaryLabel.stringValue = cleanReinstallButton.state == .on
+            ? "正在彻底清理旧版本后重装，并按已填写的平台自动写入配置。"
+            : "正在准备本地运行环境，并按已填写的平台自动写入配置。"
 
         do {
             try task.run()
@@ -386,6 +422,7 @@ final class InstallerViewController: NSViewController {
             stopHeartbeatTimer()
             installButton.isEnabled = true
             validateKeysButton.isEnabled = true
+            updateInstallModeUI()
             shuyanaiApiKeyField.isEnabled = true
             dataeyesApiKeyField.isEnabled = true
             setStatus("启动失败", color: .systemRed)
@@ -404,6 +441,7 @@ final class InstallerViewController: NSViewController {
         validateKeysButton.isEnabled = true
         shuyanaiApiKeyField.isEnabled = true
         dataeyesApiKeyField.isEnabled = true
+        updateInstallModeUI()
         installButton.isHidden = true
         retryButton.isHidden = false
 
@@ -581,6 +619,7 @@ final class InstallerViewController: NSViewController {
         validateKeysButton.isEnabled = enabled
         shuyanaiApiKeyField.isEnabled = enabled
         dataeyesApiKeyField.isEnabled = enabled
+        cleanReinstallButton.isEnabled = enabled && hasExistingInstall()
         openInstallDirButton.isEnabled = true
         openConfigButton.isEnabled = hasConfig
         refreshModelsButton.isEnabled = enabled && hasRefresh && installSucceeded
@@ -739,6 +778,16 @@ final class InstallerViewController: NSViewController {
 
     private func openClawConfigURL() -> URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".openclaw/openclaw.json")
+    }
+
+    private func hasExistingInstall() -> Bool {
+        let fileManager = FileManager.default
+        let candidates = [
+            URL(fileURLWithPath: installHome).appendingPathComponent("npm/bin/openclaw").path,
+            URL(fileURLWithPath: installHome).appendingPathComponent("npm/lib/node_modules/openclaw").path,
+            refreshCommandURL().path
+        ]
+        return candidates.contains { fileManager.fileExists(atPath: $0) }
     }
 
     private func appendLog(_ text: String) {
