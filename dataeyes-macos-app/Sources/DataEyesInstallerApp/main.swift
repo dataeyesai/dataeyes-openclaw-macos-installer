@@ -42,15 +42,23 @@ final class InstallerViewController: NSViewController {
     private let retryButton = NSButton(title: "重新安装", target: nil, action: nil)
     private let openDashboardButton = NSButton(title: "打开控制台", target: nil, action: nil)
     private let openInstallDirButton = NSButton(title: "打开安装目录", target: nil, action: nil)
+    private let refreshModelsButton = NSButton(title: "刷新模型", target: nil, action: nil)
     private let progressIndicator = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "准备就绪")
+    private let stepLabel = NSTextField(labelWithString: "当前步骤：等待开始")
+    private let installProgressBar = NSProgressIndicator()
     private let summaryLabel = NSTextField(labelWithString: "至少填写一个 API Key。安装器不会申请管理员权限，也不会修改 shell 配置。")
     private let logScrollView = NSScrollView()
     private let logTextView = NSTextView()
 
     private var installerTask: Process?
+    private var refreshTask: Process?
     private var installSucceeded = false
     private let installHome = "\(NSHomeDirectory())/.dataeyes-openclaw"
+    private var installHeartbeatTimer: Timer?
+    private var installStartedAt: Date?
+    private var lastLogAt: Date?
+    private var pendingLogBuffer = ""
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 820, height: 620))
@@ -123,12 +131,27 @@ final class InstallerViewController: NSViewController {
         openInstallDirButton.target = self
         openInstallDirButton.action = #selector(openInstallDir)
 
+        refreshModelsButton.bezelStyle = .rounded
+        refreshModelsButton.controlSize = .large
+        refreshModelsButton.target = self
+        refreshModelsButton.action = #selector(refreshModels)
+        refreshModelsButton.isEnabled = false
+
         progressIndicator.style = .spinning
         progressIndicator.controlSize = .small
         progressIndicator.isDisplayedWhenStopped = false
 
         statusLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         statusLabel.textColor = .secondaryLabelColor
+
+        stepLabel.font = .monospacedSystemFont(ofSize: 12, weight: .medium)
+        stepLabel.textColor = .secondaryLabelColor
+
+        installProgressBar.isIndeterminate = false
+        installProgressBar.minValue = 0
+        installProgressBar.maxValue = 4
+        installProgressBar.doubleValue = 0
+        installProgressBar.controlSize = .small
 
         summaryLabel.font = .systemFont(ofSize: 12, weight: .regular)
         summaryLabel.textColor = .secondaryLabelColor
@@ -150,7 +173,7 @@ final class InstallerViewController: NSViewController {
         topRow.alignment = .top
         topRow.spacing = 16
 
-        let actionRow = NSStackView(views: [installButton, retryButton, openDashboardButton, openInstallDirButton])
+        let actionRow = NSStackView(views: [installButton, retryButton, openDashboardButton, openInstallDirButton, refreshModelsButton])
         actionRow.orientation = .horizontal
         actionRow.alignment = .centerY
         actionRow.spacing = 10
@@ -160,6 +183,11 @@ final class InstallerViewController: NSViewController {
         statusRow.alignment = .centerY
         statusRow.spacing = 8
 
+        let progressStack = NSStackView(views: [stepLabel, installProgressBar])
+        progressStack.orientation = .vertical
+        progressStack.alignment = .leading
+        progressStack.spacing = 6
+
         let contentStack = NSStackView(views: [
             topRow,
             shuyanaiApiKeyLabel,
@@ -168,6 +196,7 @@ final class InstallerViewController: NSViewController {
             dataeyesApiKeyField,
             actionRow,
             statusRow,
+            progressStack,
             summaryLabel,
             logScrollView
         ])
@@ -196,8 +225,11 @@ final class InstallerViewController: NSViewController {
             logScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 320),
             installButton.widthAnchor.constraint(equalToConstant: 112),
             retryButton.widthAnchor.constraint(equalToConstant: 112),
-            openDashboardButton.widthAnchor.constraint(equalToConstant: 112)
+            openDashboardButton.widthAnchor.constraint(equalToConstant: 112),
+            installProgressBar.widthAnchor.constraint(greaterThanOrEqualToConstant: 260)
         ])
+
+        showLogPlaceholder()
     }
 
     private func titleBlock() -> NSStackView {
@@ -234,9 +266,12 @@ final class InstallerViewController: NSViewController {
 
         installSucceeded = false
         openDashboardButton.isEnabled = false
+        refreshModelsButton.isEnabled = false
         retryButton.isHidden = true
         installButton.isHidden = false
-        logTextView.string = ""
+        clearLogs()
+        installProgressBar.doubleValue = 0
+        stepLabel.stringValue = "当前步骤：准备启动安装"
         appendLog("准备执行安装脚本...\n")
         appendLog("安装目录: \(installHome)\n")
         appendLog("安装资源路径: \(payloadRoot.path)\n\n")
@@ -267,13 +302,17 @@ final class InstallerViewController: NSViewController {
                 return
             }
             DispatchQueue.main.async {
-                self?.appendLog(text)
+                self?.appendLogChunk(text)
             }
         }
 
         task.terminationHandler = { [weak self] process in
             pipe.fileHandleForReading.readabilityHandler = nil
+            let trailingData = pipe.fileHandleForReading.readDataToEndOfFile()
             DispatchQueue.main.async {
+                if !trailingData.isEmpty, let text = String(data: trailingData, encoding: .utf8) {
+                    self?.appendLogChunk(text)
+                }
                 self?.finishInstall(with: process.terminationStatus)
             }
         }
@@ -284,6 +323,9 @@ final class InstallerViewController: NSViewController {
         shuyanaiApiKeyField.isEnabled = false
         dataeyesApiKeyField.isEnabled = false
         progressIndicator.startAnimation(nil)
+        installStartedAt = Date()
+        lastLogAt = Date()
+        startHeartbeatTimer()
         setStatus("安装中...", color: .systemOrange)
         summaryLabel.stringValue = "正在准备本地运行环境，并按已填写的平台自动写入配置。"
 
@@ -292,6 +334,7 @@ final class InstallerViewController: NSViewController {
         } catch {
             installerTask = nil
             progressIndicator.stopAnimation(nil)
+            stopHeartbeatTimer()
             installButton.isEnabled = true
             shuyanaiApiKeyField.isEnabled = true
             dataeyesApiKeyField.isEnabled = true
@@ -305,6 +348,7 @@ final class InstallerViewController: NSViewController {
     private func finishInstall(with code: Int32) {
         installerTask = nil
         progressIndicator.stopAnimation(nil)
+        stopHeartbeatTimer()
         installButton.isEnabled = true
         retryButton.isEnabled = true
         shuyanaiApiKeyField.isEnabled = true
@@ -315,12 +359,16 @@ final class InstallerViewController: NSViewController {
         if code == 0 {
             installSucceeded = true
             openDashboardButton.isEnabled = true
+            refreshModelsButton.isEnabled = true
+            installProgressBar.doubleValue = installProgressBar.maxValue
+            stepLabel.stringValue = "当前步骤：安装完成"
             setStatus("安装完成", color: .systemGreen)
             summaryLabel.stringValue = "OpenClaw 已安装完成，现在可以直接打开控制台并切换已配置的平台模型。"
             appendLog("\n安装流程已完成。\n")
         } else {
             installSucceeded = false
             openDashboardButton.isEnabled = false
+            refreshModelsButton.isEnabled = FileManager.default.fileExists(atPath: refreshCommandURL().path)
             setStatus("安装失败", color: .systemRed)
             summaryLabel.stringValue = "安装没有完成。你可以检查上面的日志，确认 Key 或网络后重新执行安装。"
             appendLog("\n安装失败，退出码: \(code)\n")
@@ -345,6 +393,72 @@ final class InstallerViewController: NSViewController {
         NSWorkspace.shared.open(URL(fileURLWithPath: installHome))
     }
 
+    @objc
+    private func refreshModels() {
+        guard refreshTask == nil else { return }
+
+        let refreshURL = refreshCommandURL()
+        guard FileManager.default.isExecutableFile(atPath: refreshURL.path) else {
+            showAlert(title: "无法刷新模型", message: "没有找到刷新模型脚本，请先完成安装。")
+            return
+        }
+
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/bash")
+        task.arguments = [refreshURL.path]
+        task.currentDirectoryURL = URL(fileURLWithPath: installHome)
+
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = pipe
+
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty, let text = String(data: data, encoding: .utf8) else {
+                return
+            }
+            DispatchQueue.main.async {
+                self?.appendLogChunk(text)
+            }
+        }
+
+        task.terminationHandler = { [weak self] process in
+            pipe.fileHandleForReading.readabilityHandler = nil
+            let trailingData = pipe.fileHandleForReading.readDataToEndOfFile()
+            DispatchQueue.main.async {
+                if !trailingData.isEmpty, let text = String(data: trailingData, encoding: .utf8) {
+                    self?.appendLogChunk(text)
+                }
+                self?.refreshTask = nil
+                self?.refreshModelsButton.isEnabled = true
+                if process.terminationStatus == 0 {
+                    self?.setStatus("模型已刷新", color: .systemGreen)
+                    self?.summaryLabel.stringValue = "已根据当前 API Key 重新同步可用模型列表。"
+                } else {
+                    self?.setStatus("刷新失败", color: .systemRed)
+                    self?.summaryLabel.stringValue = "模型刷新没有完成，请检查网络或 API Key 后重试。"
+                }
+            }
+        }
+
+        refreshTask = task
+        refreshModelsButton.isEnabled = false
+        appendLog("\n开始刷新模型列表...\n")
+        setStatus("刷新模型中...", color: .systemOrange)
+        summaryLabel.stringValue = "正在根据当前配置重新拉取可用模型列表。"
+
+        do {
+            try task.run()
+        } catch {
+            refreshTask = nil
+            refreshModelsButton.isEnabled = true
+            setStatus("刷新失败", color: .systemRed)
+            summaryLabel.stringValue = "刷新模型脚本未能启动。"
+            appendLog("无法启动刷新脚本: \(error.localizedDescription)\n")
+            showAlert(title: "无法刷新模型", message: error.localizedDescription)
+        }
+    }
+
     private func scriptURL(in payloadRoot: URL) -> URL? {
         let direct = payloadRoot.appendingPathComponent("内部文件/安装主程序.sh")
         if FileManager.default.fileExists(atPath: direct.path) {
@@ -353,10 +467,112 @@ final class InstallerViewController: NSViewController {
         return nil
     }
 
+    private func refreshCommandURL() -> URL {
+        URL(fileURLWithPath: installHome).appendingPathComponent("bin/dataeyes-refresh-models")
+    }
+
     private func appendLog(_ text: String) {
         let attr = NSAttributedString(string: text)
         logTextView.textStorage?.append(attr)
         logTextView.scrollToEndOfDocument(nil)
+    }
+
+    private func appendLogChunk(_ text: String) {
+        lastLogAt = Date()
+        let cleaned = sanitizeLogText(text)
+        guard !cleaned.isEmpty else { return }
+
+        pendingLogBuffer.append(cleaned)
+        let normalized = pendingLogBuffer.replacingOccurrences(of: "\r\n", with: "\n")
+        let parts = normalized.components(separatedBy: "\n")
+
+        if let tail = parts.last {
+            pendingLogBuffer = tail
+        } else {
+            pendingLogBuffer = ""
+        }
+
+        for line in parts.dropLast() {
+            handleLogLine(String(line))
+        }
+
+        if text.contains("\n") && !pendingLogBuffer.isEmpty {
+            handleLogLine(pendingLogBuffer)
+            pendingLogBuffer = ""
+        }
+    }
+
+    private func handleLogLine(_ line: String) {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            updateProgress(using: trimmed)
+            appendLog(trimmed + "\n")
+        } else {
+            appendLog("\n")
+        }
+    }
+
+    private func updateProgress(using line: String) {
+        let pattern = #"步骤\s*([0-9]+)\s*/\s*([0-9]+)\s*:\s*(.+)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
+        let range = NSRange(line.startIndex..<line.endIndex, in: line)
+        guard let match = regex.firstMatch(in: line, options: [], range: range),
+              let currentRange = Range(match.range(at: 1), in: line),
+              let totalRange = Range(match.range(at: 2), in: line),
+              let titleRange = Range(match.range(at: 3), in: line),
+              let current = Double(line[currentRange]),
+              let total = Double(line[totalRange]) else {
+            return
+        }
+
+        installProgressBar.maxValue = max(total, 1)
+        installProgressBar.doubleValue = min(current, installProgressBar.maxValue)
+        let title = String(line[titleRange]).trimmingCharacters(in: .whitespaces)
+        stepLabel.stringValue = "当前步骤：\(Int(current))/\(Int(total)) \(title)"
+        summaryLabel.stringValue = "\(title) 正在执行中，请稍候。"
+    }
+
+    private func sanitizeLogText(_ text: String) -> String {
+        let withoutANSI = text.replacingOccurrences(
+            of: #"\u{001B}\[[0-9;?]*[ -/]*[@-~]"#,
+            with: "",
+            options: .regularExpression
+        )
+        return withoutANSI.replacingOccurrences(of: "\u{0008}", with: "")
+    }
+
+    private func clearLogs() {
+        pendingLogBuffer = ""
+        logTextView.string = ""
+    }
+
+    private func showLogPlaceholder() {
+        clearLogs()
+        appendLog("安装日志会显示在这里。\n")
+        appendLog("开始安装后，你会看到当前步骤、网络下载进度和模型同步结果。\n")
+    }
+
+    private func startHeartbeatTimer() {
+        stopHeartbeatTimer()
+        installHeartbeatTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.updateHeartbeatStatus()
+        }
+    }
+
+    private func stopHeartbeatTimer() {
+        installHeartbeatTimer?.invalidate()
+        installHeartbeatTimer = nil
+        installStartedAt = nil
+        lastLogAt = nil
+    }
+
+    private func updateHeartbeatStatus() {
+        guard installerTask != nil,
+              let startedAt = installStartedAt else { return }
+        let elapsed = Int(Date().timeIntervalSince(startedAt))
+        let idleSeconds = Int(Date().timeIntervalSince(lastLogAt ?? startedAt))
+        let statusText = idleSeconds >= 8 ? "安装中...（仍在执行，已 \(elapsed)s）" : "安装中...（\(elapsed)s）"
+        setStatus(statusText, color: .systemOrange)
     }
 
     private func setStatus(_ text: String, color: NSColor) {
