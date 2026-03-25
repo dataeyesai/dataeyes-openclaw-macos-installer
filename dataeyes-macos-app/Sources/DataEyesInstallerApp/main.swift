@@ -1,6 +1,19 @@
 import AppKit
 import Foundation
 
+private struct ProviderSpec {
+    let id: String
+    let label: String
+    let baseURL: String
+}
+
+private struct ProviderValidationResult {
+    let providerID: String
+    let label: String
+    let success: Bool
+    let message: String
+}
+
 final class PasteFriendlySecureTextField: NSSecureTextField {
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.modifierFlags.contains(.command),
@@ -40,8 +53,10 @@ final class InstallerViewController: NSViewController {
     private let dataeyesApiKeyField = PasteFriendlySecureTextField()
     private let installButton = NSButton(title: "开始安装", target: nil, action: nil)
     private let retryButton = NSButton(title: "重新安装", target: nil, action: nil)
+    private let validateKeysButton = NSButton(title: "验证 Key", target: nil, action: nil)
     private let openDashboardButton = NSButton(title: "打开控制台", target: nil, action: nil)
     private let openInstallDirButton = NSButton(title: "打开安装目录", target: nil, action: nil)
+    private let openConfigButton = NSButton(title: "打开配置文件", target: nil, action: nil)
     private let refreshModelsButton = NSButton(title: "刷新模型", target: nil, action: nil)
     private let progressIndicator = NSProgressIndicator()
     private let statusLabel = NSTextField(labelWithString: "准备就绪")
@@ -53,12 +68,17 @@ final class InstallerViewController: NSViewController {
 
     private var installerTask: Process?
     private var refreshTask: Process?
+    private var validationTask: Task<Void, Never>?
     private var installSucceeded = false
     private let installHome = "\(NSHomeDirectory())/.dataeyes-openclaw"
     private var installHeartbeatTimer: Timer?
     private var installStartedAt: Date?
     private var lastLogAt: Date?
     private var pendingLogBuffer = ""
+    private let providerSpecs = [
+        ProviderSpec(id: "shuyanai", label: "国内站", baseURL: "https://platform.shuyanai.com"),
+        ProviderSpec(id: "dataeyes", label: "国际站", baseURL: "https://cloud.dataeyes.ai/v1")
+    ]
 
     override func loadView() {
         view = NSView(frame: NSRect(x: 0, y: 0, width: 820, height: 620))
@@ -120,6 +140,11 @@ final class InstallerViewController: NSViewController {
         retryButton.action = #selector(startInstall)
         retryButton.isHidden = true
 
+        validateKeysButton.bezelStyle = .rounded
+        validateKeysButton.controlSize = .large
+        validateKeysButton.target = self
+        validateKeysButton.action = #selector(validateKeys)
+
         openDashboardButton.bezelStyle = .rounded
         openDashboardButton.controlSize = .large
         openDashboardButton.target = self
@@ -130,6 +155,11 @@ final class InstallerViewController: NSViewController {
         openInstallDirButton.controlSize = .large
         openInstallDirButton.target = self
         openInstallDirButton.action = #selector(openInstallDir)
+
+        openConfigButton.bezelStyle = .rounded
+        openConfigButton.controlSize = .large
+        openConfigButton.target = self
+        openConfigButton.action = #selector(openConfigFile)
 
         refreshModelsButton.bezelStyle = .rounded
         refreshModelsButton.controlSize = .large
@@ -173,10 +203,15 @@ final class InstallerViewController: NSViewController {
         topRow.alignment = .top
         topRow.spacing = 16
 
-        let actionRow = NSStackView(views: [installButton, retryButton, openDashboardButton, openInstallDirButton, refreshModelsButton])
-        actionRow.orientation = .horizontal
-        actionRow.alignment = .centerY
-        actionRow.spacing = 10
+        let primaryActionRow = NSStackView(views: [installButton, retryButton, validateKeysButton, refreshModelsButton])
+        primaryActionRow.orientation = .horizontal
+        primaryActionRow.alignment = .centerY
+        primaryActionRow.spacing = 10
+
+        let secondaryActionRow = NSStackView(views: [openDashboardButton, openInstallDirButton, openConfigButton])
+        secondaryActionRow.orientation = .horizontal
+        secondaryActionRow.alignment = .centerY
+        secondaryActionRow.spacing = 10
 
         let statusRow = NSStackView(views: [progressIndicator, statusLabel])
         statusRow.orientation = .horizontal
@@ -194,7 +229,8 @@ final class InstallerViewController: NSViewController {
             shuyanaiApiKeyField,
             dataeyesApiKeyLabel,
             dataeyesApiKeyField,
-            actionRow,
+            primaryActionRow,
+            secondaryActionRow,
             statusRow,
             progressStack,
             summaryLabel,
@@ -225,6 +261,8 @@ final class InstallerViewController: NSViewController {
             logScrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 320),
             installButton.widthAnchor.constraint(equalToConstant: 112),
             retryButton.widthAnchor.constraint(equalToConstant: 112),
+            validateKeysButton.widthAnchor.constraint(equalToConstant: 112),
+            refreshModelsButton.widthAnchor.constraint(equalToConstant: 112),
             openDashboardButton.widthAnchor.constraint(equalToConstant: 112),
             installProgressBar.widthAnchor.constraint(greaterThanOrEqualToConstant: 260)
         ])
@@ -257,6 +295,16 @@ final class InstallerViewController: NSViewController {
         guard installerTask == nil else {
             return
         }
+        guard validationTask == nil else {
+            return
+        }
+
+        validateProviderKeys(startInstallOnSuccess: true)
+    }
+
+    private func runInstall() {
+        let shuyanaiApiKey = shuyanaiApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dataeyesApiKey = dataeyesApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard let payloadRoot = Bundle.main.resourceURL?.appendingPathComponent("payload"),
               let scriptURL = scriptURL(in: payloadRoot) else {
@@ -320,6 +368,7 @@ final class InstallerViewController: NSViewController {
         installerTask = task
         installButton.isEnabled = false
         retryButton.isEnabled = false
+        validateKeysButton.isEnabled = false
         shuyanaiApiKeyField.isEnabled = false
         dataeyesApiKeyField.isEnabled = false
         progressIndicator.startAnimation(nil)
@@ -336,6 +385,7 @@ final class InstallerViewController: NSViewController {
             progressIndicator.stopAnimation(nil)
             stopHeartbeatTimer()
             installButton.isEnabled = true
+            validateKeysButton.isEnabled = true
             shuyanaiApiKeyField.isEnabled = true
             dataeyesApiKeyField.isEnabled = true
             setStatus("启动失败", color: .systemRed)
@@ -351,6 +401,7 @@ final class InstallerViewController: NSViewController {
         stopHeartbeatTimer()
         installButton.isEnabled = true
         retryButton.isEnabled = true
+        validateKeysButton.isEnabled = true
         shuyanaiApiKeyField.isEnabled = true
         dataeyesApiKeyField.isEnabled = true
         installButton.isHidden = true
@@ -391,6 +442,30 @@ final class InstallerViewController: NSViewController {
     @objc
     private func openInstallDir() {
         NSWorkspace.shared.open(URL(fileURLWithPath: installHome))
+    }
+
+    @objc
+    private func openConfigFile() {
+        let configURL = openClawConfigURL()
+        if FileManager.default.fileExists(atPath: configURL.path) {
+            NSWorkspace.shared.open(configURL)
+        } else {
+            showAlert(title: "配置文件未生成", message: "当前还没有找到 \(configURL.path)。请先完成安装或刷新模型。")
+        }
+    }
+
+    @objc
+    private func validateKeys() {
+        guard installerTask == nil else { return }
+        guard validationTask == nil else { return }
+        let shuyanaiApiKey = shuyanaiApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dataeyesApiKey = dataeyesApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !shuyanaiApiKey.isEmpty || !dataeyesApiKey.isEmpty else {
+            showAlert(title: "缺少 API Key", message: "请至少填写一个平台的 API Key 后再验证。")
+            return
+        }
+
+        validateProviderKeys(startInstallOnSuccess: false)
     }
 
     @objc
@@ -459,6 +534,197 @@ final class InstallerViewController: NSViewController {
         }
     }
 
+    private func validateProviderKeys(startInstallOnSuccess: Bool) {
+        let shuyanaiApiKey = shuyanaiApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dataeyesApiKey = dataeyesApiKeyField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let keyedProviders = providerSpecs.compactMap { spec -> (ProviderSpec, String)? in
+            switch spec.id {
+            case "shuyanai":
+                return shuyanaiApiKey.isEmpty ? nil : (spec, shuyanaiApiKey)
+            case "dataeyes":
+                return dataeyesApiKey.isEmpty ? nil : (spec, dataeyesApiKey)
+            default:
+                return nil
+            }
+        }
+
+        guard !keyedProviders.isEmpty else {
+            showAlert(title: "缺少 API Key", message: "请至少填写一个平台的 API Key。")
+            return
+        }
+
+        validationTask?.cancel()
+        setControlsEnabled(false)
+        progressIndicator.startAnimation(nil)
+        setStatus("验证 Key 中...", color: .systemOrange)
+        stepLabel.stringValue = "当前步骤：验证 API Key"
+        summaryLabel.stringValue = "正在检查 API Key 是否可用，并确认接口能够返回模型列表。"
+        appendLog("\n开始验证 API Key ...\n")
+
+        validationTask = Task { [weak self] in
+            guard let self else { return }
+            let results = await self.performValidation(for: keyedProviders)
+            await MainActor.run {
+                self.validationTask = nil
+                self.progressIndicator.stopAnimation(nil)
+                self.setControlsEnabled(true)
+                self.handleValidationResults(results, startInstallOnSuccess: startInstallOnSuccess)
+            }
+        }
+    }
+
+    private func setControlsEnabled(_ enabled: Bool) {
+        let hasConfig = FileManager.default.fileExists(atPath: openClawConfigURL().path)
+        let hasRefresh = FileManager.default.isExecutableFile(atPath: refreshCommandURL().path)
+        installButton.isEnabled = enabled
+        retryButton.isEnabled = enabled
+        validateKeysButton.isEnabled = enabled
+        shuyanaiApiKeyField.isEnabled = enabled
+        dataeyesApiKeyField.isEnabled = enabled
+        openInstallDirButton.isEnabled = true
+        openConfigButton.isEnabled = hasConfig
+        refreshModelsButton.isEnabled = enabled && hasRefresh && installSucceeded
+    }
+
+    private func handleValidationResults(_ results: [ProviderValidationResult], startInstallOnSuccess: Bool) {
+        let successful = results.filter(\.success)
+        let failed = results.filter { !$0.success }
+
+        for result in results {
+            appendLog("[\(result.label)] \(result.message)\n")
+        }
+
+        if failed.isEmpty {
+            setStatus("Key 验证通过", color: .systemGreen)
+            summaryLabel.stringValue = "已确认 API Key 可用，并且接口可以返回模型列表。"
+            if startInstallOnSuccess {
+                appendLog("Key 验证通过，开始执行安装。\n")
+                runInstall()
+            }
+            return
+        }
+
+        let failureText = failed.map { "\($0.label)：\($0.message)" }.joined(separator: "\n")
+        setStatus("Key 验证失败", color: .systemRed)
+        summaryLabel.stringValue = successful.isEmpty
+            ? "没有通过任何 Key 验证，请检查 Key 内容、分组权限和网络。"
+            : "部分 Key 可用，部分 Key 验证失败。修正后可重新验证或安装。"
+
+        let title = successful.isEmpty ? "API Key 不可用" : "部分 API Key 验证失败"
+        showAlert(title: title, message: failureText)
+    }
+
+    private func performValidation(for providers: [(ProviderSpec, String)]) async -> [ProviderValidationResult] {
+        await withTaskGroup(of: ProviderValidationResult.self) { group in
+            for (spec, apiKey) in providers {
+                group.addTask {
+                    await self.validateProvider(spec: spec, apiKey: apiKey)
+                }
+            }
+
+            var results: [ProviderValidationResult] = []
+            for await result in group {
+                results.append(result)
+            }
+
+            return results.sorted { $0.providerID < $1.providerID }
+        }
+    }
+
+    private func validateProvider(spec: ProviderSpec, apiKey: String) async -> ProviderValidationResult {
+        let endpoints = modelEndpointCandidates(baseURL: spec.baseURL)
+        var lastFailure = "未返回模型列表"
+
+        for endpoint in endpoints {
+            var request = URLRequest(url: endpoint)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 20
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            request.setValue("dataeyes-installer/validate", forHTTPHeaderField: "User-Agent")
+
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard let http = response as? HTTPURLResponse else {
+                    lastFailure = "响应无效"
+                    continue
+                }
+
+                if !(200...299).contains(http.statusCode) {
+                    lastFailure = "HTTP \(http.statusCode)"
+                    continue
+                }
+
+                let modelCount = extractModelCount(from: data)
+                if modelCount > 0 {
+                    return ProviderValidationResult(
+                        providerID: spec.id,
+                        label: spec.label,
+                        success: true,
+                        message: "验证通过，发现 \(modelCount) 个可用模型"
+                    )
+                }
+
+                lastFailure = "接口可达，但没有返回模型列表"
+            } catch {
+                lastFailure = error.localizedDescription
+            }
+        }
+
+        return ProviderValidationResult(
+            providerID: spec.id,
+            label: spec.label,
+            success: false,
+            message: "验证失败：\(lastFailure)"
+        )
+    }
+
+    private func modelEndpointCandidates(baseURL: String) -> [URL] {
+        let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !base.isEmpty else { return [] }
+
+        var candidates = ["\(base)/models"]
+        if !base.hasSuffix("/v1") {
+            candidates.append("\(base)/v1/models")
+        }
+        if base.hasSuffix("/models") {
+            candidates.insert(base, at: 0)
+        }
+
+        var urls: [URL] = []
+        var seen = Set<String>()
+        for candidate in candidates where !seen.contains(candidate) {
+            seen.insert(candidate)
+            if let url = URL(string: candidate) {
+                urls.append(url)
+            }
+        }
+        return urls
+    }
+
+    private func extractModelCount(from data: Data) -> Int {
+        guard let object = try? JSONSerialization.jsonObject(with: data) else { return 0 }
+        return responseModelItems(from: object).count
+    }
+
+    private func responseModelItems(from object: Any) -> [Any] {
+        if let array = object as? [Any] {
+            return array
+        }
+
+        guard let dict = object as? [String: Any] else { return [] }
+        for key in ["data", "models", "items", "results"] {
+            if let value = dict[key] {
+                let nested = responseModelItems(from: value)
+                if !nested.isEmpty {
+                    return nested
+                }
+            }
+        }
+        return []
+    }
+
     private func scriptURL(in payloadRoot: URL) -> URL? {
         let direct = payloadRoot.appendingPathComponent("内部文件/安装主程序.sh")
         if FileManager.default.fileExists(atPath: direct.path) {
@@ -469,6 +735,10 @@ final class InstallerViewController: NSViewController {
 
     private func refreshCommandURL() -> URL {
         URL(fileURLWithPath: installHome).appendingPathComponent("bin/dataeyes-refresh-models")
+    }
+
+    private func openClawConfigURL() -> URL {
+        URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".openclaw/openclaw.json")
     }
 
     private func appendLog(_ text: String) {
