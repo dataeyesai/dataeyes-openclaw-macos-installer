@@ -108,6 +108,8 @@ write_release_notes() {
 ## Highlights
 
 - Supports both China and Global platform configuration
+- Auto-detects the real model list available to the provided API key and injects it into OpenClaw
+- Lets users refresh models later with \`~/.dataeyes-openclaw/bin/dataeyes-refresh-models\`
 - Builds a universal app for both Apple Silicon and Intel Macs
 - Fixes the broken bundle signature that previously caused macOS to report the app as damaged
 - Fixes paste behavior in the macOS password field

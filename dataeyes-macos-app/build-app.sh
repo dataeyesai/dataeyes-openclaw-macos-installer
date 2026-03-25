@@ -90,6 +90,7 @@ cp "$ICON_PATH" "$RESOURCES_DIR/${APP_ICON_NAME}.icns"
 chmod +x "$RESOURCES_DIR/payload/双击开始安装.command" \
   "$RESOURCES_DIR/payload/内部文件/安装主程序.sh" \
   "$RESOURCES_DIR/payload/内部文件/安装OpenClaw基础环境.sh" \
+  "$RESOURCES_DIR/payload/内部文件/scripts/dataeyes-refresh-models.sh" \
   "$RESOURCES_DIR/payload/内部文件/scripts/dataeyes-setup.sh" \
   "$RESOURCES_DIR/payload/内部文件/scripts/dataeyes-verify.sh"
 

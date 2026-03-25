@@ -3,10 +3,35 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 INNER_DIR="$DIR/内部文件"
 APP_HOME="${OPENCLAW_HOME:-$HOME/.dataeyes-openclaw}"
-export PATH="$APP_HOME/npm/bin:$APP_HOME/node/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+SUPPORT_HOME="$APP_HOME/installer-support"
+SUPPORT_SCRIPTS="$SUPPORT_HOME/scripts"
+SUPPORT_TEMPLATES="$SUPPORT_HOME/templates"
+BIN_HOME="$APP_HOME/bin"
+export PATH="$BIN_HOME:$APP_HOME/npm/bin:$APP_HOME/node/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+
+install_support_scripts() {
+  mkdir -p "$SUPPORT_SCRIPTS" "$SUPPORT_TEMPLATES" "$BIN_HOME"
+  cp "$INNER_DIR/scripts/dataeyes-setup.sh" "$SUPPORT_SCRIPTS/dataeyes-setup.sh"
+  cp "$INNER_DIR/scripts/dataeyes-refresh-models.sh" "$SUPPORT_SCRIPTS/dataeyes-refresh-models.sh"
+  cp "$INNER_DIR/scripts/dataeyes-verify.sh" "$SUPPORT_SCRIPTS/dataeyes-verify.sh"
+  cp "$INNER_DIR/templates/dataeyes-provider.json" "$SUPPORT_TEMPLATES/dataeyes-provider.json"
+
+  cat > "$BIN_HOME/dataeyes-refresh-models" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+bash "$SUPPORT_SCRIPTS/dataeyes-refresh-models.sh"
+EOF
+
+  chmod +x \
+    "$SUPPORT_SCRIPTS/dataeyes-setup.sh" \
+    "$SUPPORT_SCRIPTS/dataeyes-refresh-models.sh" \
+    "$SUPPORT_SCRIPTS/dataeyes-verify.sh" \
+    "$BIN_HOME/dataeyes-refresh-models"
+}
 
 OPENCLAW_SKIP_ONBOARD=1 bash "$INNER_DIR/安装OpenClaw基础环境.sh"
-export PATH="$APP_HOME/npm/bin:$APP_HOME/node/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+install_support_scripts
+export PATH="$BIN_HOME:$APP_HOME/npm/bin:$APP_HOME/node/bin:$HOME/.npm-global/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 hash -r || true
 
 OPENCLAW_BIN="$APP_HOME/npm/bin/openclaw"
@@ -74,7 +99,7 @@ if [[ -z "$SHUYANAI_API_KEY" && -z "$DATAEYES_API_KEY" ]]; then
   exit 1
 fi
 
-SHUYANAI_API_KEY="$SHUYANAI_API_KEY" DATAEYES_API_KEY="$DATAEYES_API_KEY" bash "$INNER_DIR/scripts/dataeyes-setup.sh"
+SHUYANAI_API_KEY="$SHUYANAI_API_KEY" DATAEYES_API_KEY="$DATAEYES_API_KEY" bash "$SUPPORT_SCRIPTS/dataeyes-setup.sh"
 "$OPENCLAW_BIN" gateway install --force >/tmp/openclaw-gateway-install.log 2>&1 || {
   cat /tmp/openclaw-gateway-install.log
   exit 1
@@ -83,7 +108,7 @@ SHUYANAI_API_KEY="$SHUYANAI_API_KEY" DATAEYES_API_KEY="$DATAEYES_API_KEY" bash "
   cat /tmp/openclaw-gateway-restart.log
   exit 1
 }
-bash "$INNER_DIR/scripts/dataeyes-verify.sh"
+bash "$SUPPORT_SCRIPTS/dataeyes-verify.sh"
 open_dashboard || {
   echo "控制台未自动打开，请稍后重试或手动执行:"
   echo "  python3 - <<'PY'"

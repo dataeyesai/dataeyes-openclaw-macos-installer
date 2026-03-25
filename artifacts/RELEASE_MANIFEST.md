@@ -1,8 +1,8 @@
 # Release Manifest
 
-- Generated at: 2026-03-25 08:31:55 UTC
-- Version: 1.0.1
-- Build: 2
+- Generated at: 2026-03-25 09:31:52 UTC
+- Version: 1.0.2
+- Build: 3
 - Bundle ID: ai.dataeyes.installer
 - Minimum macOS: 13.0
 - Architectures: arm64 x86_64
@@ -11,9 +11,9 @@
 
 | File | Size | SHA256 |
 | --- | --- | --- |
-| DataEyes Installer.zip | 4.23 MiB | 112f0b3018119469e2e550f60181333e693044dce978106ad31193280b44f457 |
-| DataEyes Installer.dmg | 4.65 MiB | 49d8188f84c62786b751241a277698a51e026ac14febc1941d4555a5435f7bca |
-| DataEyes Installer-unsigned.pkg | 4.22 MiB | c29ed1d836359f5281c00eab20c029e55a5d754dc32058e3800317dbc217a4a9 |
+| DataEyes Installer.zip | 4.23 MiB | 6e9f26bcaedeb5e0141584349e1a7993d530f01176974fb77930a5f7574df403 |
+| DataEyes Installer.dmg | 4.64 MiB | b0abef2bd78ddd187e43ec34f9be4d89dbd29049ac83491220648da311e198a4 |
+| DataEyes Installer-unsigned.pkg | 4.22 MiB | 5cec270345654ac39f47385e0046d0e89374bdf6d6146c92c744526fb631573e |
 
 ## Notes
 

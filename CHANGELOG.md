@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 - 2026-03-25
+
+- 安装时优先根据填写的 API Key 动态拉取该账号真实可用的模型列表
+- 注入后的可用模型会写入 `~/.openclaw/openclaw.json`，可在 OpenClaw 内切换
+- 新增 `~/.dataeyes-openclaw/bin/dataeyes-refresh-models`，用户更换 API Key 后可刷新模型列表
+- `/models` 拉取失败时会优先复用现有配置中的模型，避免回退成固定模板导致分组模型丢失
+- 兼容更多模型接口返回格式，包括 `data`、`models`、`items`、`results`
+
 ## 1.0.1 - 2026-03-25
 
 - 修复 App bundle 的破损签名状态，避免 macOS 将安装器判定为“已损坏”

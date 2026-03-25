@@ -12,7 +12,7 @@
 安装器会自动完成：
 - 安装或复用 Node.js 22
 - 安装 OpenClaw 到 `~/.dataeyes-openclaw`
-- 写入 DataEyes 配置
+- 根据填写的 API Key 自动拉取该账号可用模型并写入 DataEyes 配置
 - 启动 Gateway
 - 打开带令牌的本机控制台
 
@@ -49,6 +49,16 @@ bash install.sh
 
 运行目录：
 - `~/.dataeyes-openclaw`
+
+模型同步：
+- 安装时会优先从供应商 `/models` 接口读取当前 API Key 可用模型
+- 会把可用模型注入到 `~/.openclaw/openclaw.json`
+- 注入后可在 OpenClaw 内切换这些模型
+- 如果用户后续更换 API Key，可重新执行：
+
+```bash
+~/.dataeyes-openclaw/bin/dataeyes-refresh-models
+```
 
 默认模型：
 - 主模型：`dataeyes/gpt-5.4`

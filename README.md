@@ -68,6 +68,9 @@
 ## 这版安装器包含的修复
 
 - 支持国内站 / 国际站双平台配置
+- 根据填写的 API Key 自动发现并注入可用模型，避免不同分组只落到固定模板模型
+- 生成后的模型列表会写入 OpenClaw 配置，并可在 OpenClaw 中切换
+- 提供 `~/.dataeyes-openclaw/bin/dataeyes-refresh-models` 用于后续刷新模型
 - 修复 macOS 密码框粘贴问题
 - 安装时强制覆盖旧的 gateway service 定义，避免 `loaded but stopped`
 - 安装完成后不再直接打开裸的 `127.0.0.1:18789`
